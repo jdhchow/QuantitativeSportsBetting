@@ -1,5 +1,5 @@
 # Attridge
-Goal: To develop sports betting algorithms
+Goal: To develop sports betting algorithms\
 Stretch Goal: To setup a fund for the beginning of the 2019/2020 season
 
 ## 2019/2020 Season Schedules
