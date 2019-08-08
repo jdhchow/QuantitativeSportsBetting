@@ -1,4 +1,4 @@
-# Attridge
+# Portfolio Management
 
 This folder is for (in future)
  * Testing correlations between strategies
