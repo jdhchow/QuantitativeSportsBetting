@@ -42,7 +42,7 @@ class Scraper(object):
             root = self.root_url
         return root + path
 
-    def get_lazy_element_by_id(self, _id, timeout=10):
+    def get_lazy_element_by_id(self, _id, timeout=15):
         return WebDriverWait(self.browser, timeout).until(
             EC.presence_of_element_located((By.ID, _id))
         )

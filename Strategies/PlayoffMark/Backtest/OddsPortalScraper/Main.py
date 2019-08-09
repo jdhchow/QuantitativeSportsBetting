@@ -1,5 +1,12 @@
 from Strategies.PlayoffMark.Backtest.OddsPortalScraper.NHLScraper import NHLScraper
+import datetime
 
-n = NHLScraper(seasonsToScrape=list(range(2002, 2020)),
-               outputLoc='HistoricalOdds/')
-n.scrape()
+
+if __name__ == '__main__':
+    print(str(datetime.datetime.now()) + ': Started')
+
+    n = NHLScraper(seasonsToScrape=list(range(2002, 2012)),
+                   outputLoc='HistoricalOdds/')
+    n.scrape()
+
+    print(str(datetime.datetime.now()) + ': Finished')

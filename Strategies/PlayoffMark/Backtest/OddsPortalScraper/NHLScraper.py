@@ -121,18 +121,20 @@ class NHLScraper(Scraper):
                 links_to_follow.append(link)
 
         for link in links_to_follow:
-            self.complete_link(link)
+            self.complete_link(link, 0)
 
-    def complete_link(self, link):
+    def complete_link(self, link, attempts):
         try:
             self.browser.get(link)
             partial = self.partial_store.pop(link)
             html = self.get_lazy_element_by_id('odds-data-table').get_attribute("innerHTML")
             soup = BeautifulSoup(html, "html.parser")
 
-            _, day, time = [s.strip() for s in self.browser.find_element_by_class_name("date").get_attribute("innerHTML").split(",")]
+            _, day, gameTime = [s.strip() for s in self.browser.find_element_by_class_name("date").get_attribute("innerHTML").split(",")]
 
             oddsTable = soup.find("table", {"class": "table-main detail-odds sortable"}).find('tbody')
+
+            partial['odds'] = {}
 
             for row in oddsTable.find_all('tr'):
                 cols = row.find_all("td")
@@ -142,17 +144,21 @@ class NHLScraper(Scraper):
 
                 bookmaker = cols[0].find('a', {'class': 'name'}).get_text()
 
-                partial[bookmaker] = {}
-                partial[bookmaker]['home.odds'] = float(cols[1].get_text())
-                partial[bookmaker]['tie.odds'] = float(cols[2].get_text())
-                partial[bookmaker]['away.odds'] = float(cols[3].get_text())
+                partial['odds'][bookmaker] = {}
+                partial['odds'][bookmaker]['home.odds'] = float(cols[1].get_text())
+                partial['odds'][bookmaker]['tie.odds'] = float(cols[2].get_text())
+                partial['odds'][bookmaker]['away.odds'] = float(cols[3].get_text())
 
             partial['day'] = day
-            partial['time'] = time
+            partial['time'] = gameTime
             print(partial)
             self.store.append(partial)
         except:
-            print('Unable to extract odds from: ' + link)
+            if attempts == 0:
+                time.sleep(300)
+                self.complete_link(link, attempts + 1)
+            else:
+                print('Unable to extract odds from: ' + link)
 
     def dump_to_store(self, season):
         with open(self.outputLoc + 'Season' + str(season) + '.json', 'w+') as fp:
