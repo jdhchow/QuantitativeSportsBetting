@@ -1,9 +1,10 @@
 # PlayoffMark
 
 #### About
-  * Wager on NHL playoff games
-  * Regular time (but does not bet on ties)
-  * Uses regular season performance to build stable distribution of teams
+  * Strategy for wagering on NHL playoff games
+  * Bets on the outcome of games at the end of regular time (does not consider ties)
+  * Uses regular season performance to build ranking of teams
+  * See /Attridge/Strategies/PlayoffMark/Misc/Explanation for more information
 #### Requirements
   1. Run `pip install requirements.txt` (in /Attridge/Strategies/PlayoffMark) to install the required Python libraries.
   2. Install Firefox.

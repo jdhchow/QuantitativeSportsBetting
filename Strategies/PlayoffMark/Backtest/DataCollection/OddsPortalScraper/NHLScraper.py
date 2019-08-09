@@ -1,4 +1,4 @@
-from Strategies.PlayoffMark.Backtest.OddsPortalScraper.Scraper import Scraper
+from Strategies.PlayoffMark.Backtest.DataCollection.OddsPortalScraper.Scraper import Scraper
 from bs4 import BeautifulSoup
 import json
 import re
