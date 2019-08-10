@@ -17,7 +17,7 @@ Stretch Goal: To setup a fund for the beginning of the 2019/2020 season
 | NBA            | Playoffs       | 2020-04-XX | 2020-06-XX |
 
 ## Note on Code Quality
-A lot of the code could be made more modular. The importance; however, we do not
-want a clean repository if it means many dependencies. Each strategy should be
-self-contained. Further, we do not care about code quality, rather the code is
-simply the means to generate the backtesting results.
+This code could be made more modular. However, we do not want a clean repository
+if it means many dependencies. Each strategy should be self-contained. Further,
+out end goal is not the code itself, rather the code is simply the means to
+generate backtesting results.

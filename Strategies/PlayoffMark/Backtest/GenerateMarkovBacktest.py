@@ -1,7 +1,8 @@
-from Jonathan.NHL.Strategies.GeneralIO import *
 import numpy as np
+import pandas as pd
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
+import datetime
 
 
 '''
@@ -48,12 +49,67 @@ def calculateReturns(prediction, winner, currOdds, oppOdds, wager):
         return -applicableOdds * wager
 
 
-########################################################################################################################
+def readHistoricalGameData(season):
+    with open('DataCollection/NHLAPIScraper/HistoricalGameData/Season' + str(season) + '.csv', mode='r') as dataFile:
+        data = pd.read_csv(dataFile, encoding='utf-8', index_col=[0, 1])
+        data.index = [data.index.get_level_values(0).astype(str), data.index.get_level_values(1)]
+
+    return data
+
+
+def getOdds(season):
+    # Odds scraped from OddsPortal (e.g. http://www.oddsportal.com/hockey/usa/nhl-2015-2016/results/#/page/4/)
+    bookmakerOdds = pd.read_json('DataCollection/OddsPortalScraper/HistoricalOdds/Season' + str(season) + '.json')
+    bookmakerOdds['date'] = pd.to_datetime(bookmakerOdds['day'] + ' ' + bookmakerOdds['time'], format='%d %b %Y %H:%M')
+    bookmakerOdds.drop(['day', 'time'], axis=1, inplace=True)
+    bookmakerOdds = bookmakerOdds.loc[bookmakerOdds['pre-season'] == False]
+
+    return bookmakerOdds
+
+
+def mergeOdds(trainingData, bookmakerOdds, allowedBookmakers):
+    oddsDict = {'currTeam.odds': [], 'oppTeam.odds': [], 'tie.odds': []}
+
+    teamTable = pd.concat([trainingData['team.name'].rename('home'), trainingData['team.name'].shift(-1).rename('away'),
+                           trainingData['game.date']], axis=1).iloc[::2, :]
+
+    for key in list(oddsDict.keys()):
+        oddsDict[key] = list(teamTable.apply(lambda row: mergeOddsHelper(row, bookmakerOdds, key, allowedBookmakers), axis=1))
+        oddsDict[key] = [item for sublist in oddsDict[key] for item in sublist]
+
+        trainingData[key] = oddsDict[key]
+
+    return trainingData
+
+
+def mergeOddsHelper(row, odds, side, allowedBookmakers):
+    restricted = odds.loc[(odds['home'] == row['home']) & (odds['away'] == row['away']) &
+                          ((odds['date'] + datetime.timedelta(hours=10)) >= row['game.date']) &
+                          ((odds['date'] - datetime.timedelta(hours=10)) <= row['game.date'])]
+
+    if restricted.empty:
+        return [0, 0]
+
+    if 'currTeam' in side:
+        euroOdd = [max([0] + [value['home.odds'] for key, value in (restricted['odds'].iloc[0]).items() if key in allowedBookmakers])]
+        euroOdd = euroOdd + [max([0] + [value['away.odds'] for key, value in (restricted['odds'].iloc[0]).items() if key in allowedBookmakers])]
+    elif 'oppTeam' in side:
+        euroOdd = [max([0] + [value['away.odds'] for key, value in (restricted['odds'].iloc[0]).items() if key in allowedBookmakers])]
+        euroOdd = euroOdd + [max([0] + [value['home.odds'] for key, value in (restricted['odds'].iloc[0]).items() if key in allowedBookmakers])]
+    else:
+        euroOdd = [max([0] + [value['tie.odds'] for key, value in (restricted['odds'].iloc[0]).items() if key in allowedBookmakers])] * 2
+
+    if len(restricted) > 1:
+        print(str(datetime.datetime.now()) + ': Merging by time and teams not unique on ' + str(row['game.date']))
+
+    return euroOdd
+
+
 if __name__ == '__main__':
     print(str(datetime.datetime.now()) + ': Started')
 
-    # seasonList = [2002, 2003, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017]
-    seasonList = [2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017]
+    # seasonList = [2002, 2003, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018]
+    seasonList = [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018]
 
     # Wager 100 * odds (CAD $)
     wagerAmount = 100
@@ -66,19 +122,20 @@ if __name__ == '__main__':
 
     trainingColumns = ['home', 'away',
                        'currTeam.odds', 'tie.odds', 'oppTeam.odds',
-                       'currTeam.oddsMax', 'tie.oddsMax', 'oppTeam.oddsMax',
                        'game.type',
                        'team.name', 'team.id',
                        'goals', 'game.winner']
 
     outputColumns = ['currTeam.odds', 'tie.odds', 'oppTeam.odds',
-                     'currTeam.oddsMax', 'tie.oddsMax', 'oppTeam.oddsMax',
-                     'team.name', 'team.id',
                      'game.winner', 'predictions']
+
+    acceptableBookmakers = ['bet365', 'William Hill', 'Bethard', 'bet-at-home', 'bwin', 'Unibet',
+                            '1xBet', '18Bet', 'Marathonbet', 'Coolbet']
 
     for season in seasonList:
         try:
-            trainingData = readDataFrame('Strategies/Markov/Records/TrainingData/TrainingData' + str(season), True)
+            trainingData = readHistoricalGameData(season)
+            trainingData = mergeOdds(trainingData, getOdds(season), acceptableBookmakers)
             trainingData = trainingData[trainingColumns]
             trainingData.fillna(0, inplace=True)
 
@@ -275,14 +332,13 @@ if __name__ == '__main__':
 
             print(str(datetime.datetime.now()) + ': Finished ' + str(season))
         except FileNotFoundError:
-            writeLog(str(datetime.datetime.now()) +
-                     ': Error reading file: Records/TrainingData/TrainingData' + str(season) + '.csv\n')
+            print(str(datetime.datetime.now()) + ': Error reading one or more files from season ' + str(season))
 
     # Calculate returns for each game
     completePlayoff['WagerReturns'] = completePlayoff.apply(lambda row: calculateReturns(row['predictions'],
                                                                                          row['game.winner'],
-                                                                                         row['currTeam.oddsMax'],
-                                                                                         row['oppTeam.oddsMax'],
+                                                                                         row['currTeam.odds'],
+                                                                                         row['oppTeam.odds'],
                                                                                          wagerAmount), axis=1)
 
     # Add initial fund size and split returns by season
@@ -296,10 +352,10 @@ if __name__ == '__main__':
         cumulativeWagerReturns[seasonIter] = np.cumsum([cumulativeWagerReturns[seasonIter - 1][-1]] + cumulativeWagerReturns[seasonIter])
 
     # Graph returns over time
-    plt.figure()
+    plt.figure(figsize=(10, 8))
 
     xAxisCounter = 0
-    colourList = ['#015482', '#95D0FC', '#5E819D'] * 4
+    colourList = ['#015482', '#95D0FC', '#5E819D'] * int(np.ceil(len(seasonList) / 3))
 
     for returnIter in range(1, len(cumulativeWagerReturns)):
         plt.plot(list(range(xAxisCounter, xAxisCounter + len(cumulativeWagerReturns[returnIter]))), cumulativeWagerReturns[returnIter], c=colourList[returnIter - 1])
@@ -308,10 +364,11 @@ if __name__ == '__main__':
 
     plt.xlabel('Game Number')
     plt.ylabel('Notional (CAD $)')
-    plt.title('Markov Chain Model Cumulative Returns (2006-2017)')
-    plt.show()
+    plt.title('Markov Chain Model Cumulative Returns (2009-2018)')
+    plt.savefig('Analysis/CumulativeReturns.png', dpi=500)
 
     # Print results
-    writeDataFrame(completePlayoff, 'Development/Analysis/MarkovBacktestRaw')
+    with open('Analysis/HistoricalPerformance.csv', mode='w+') as dataFile:
+        completePlayoff.to_csv(dataFile, encoding='utf-8', index=True)
 
     print(str(datetime.datetime.now()) + ': Finished')
