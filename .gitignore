@@ -17,6 +17,7 @@
 *.png
 *.jpg
 *.jpeg
+*.log
 StrategyIdeas/*
 CommonData/*
 **/Misc/*
