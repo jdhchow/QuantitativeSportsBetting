@@ -115,7 +115,7 @@ if __name__ == '__main__':
     wagerAmount = 100
 
     # Being with 2000 (CAD $)
-    initialNotional = 2000
+    initialNotional = 5000
 
     trainingData = pd.DataFrame()
     completePlayoff = pd.DataFrame()
@@ -352,7 +352,7 @@ if __name__ == '__main__':
         cumulativeWagerReturns[seasonIter] = np.cumsum([cumulativeWagerReturns[seasonIter - 1][-1]] + cumulativeWagerReturns[seasonIter])
 
     # Graph returns over time
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(10, 5))
 
     xAxisCounter = 0
     colourList = ['#015482', '#95D0FC', '#5E819D'] * int(np.ceil(len(seasonList) / 3))
@@ -368,7 +368,7 @@ if __name__ == '__main__':
     plt.savefig('Analysis/CumulativeReturns.png', dpi=500)
 
     # Print results
-    with open('Analysis/HistoricalPerformance.csv', mode='w+') as dataFile:
+    with open('Analysis/HistoricalPerformanceRaw.csv', mode='w+') as dataFile:
         completePlayoff.to_csv(dataFile, encoding='utf-8', index=True)
 
     print(str(datetime.datetime.now()) + ': Finished')
