@@ -1,12 +1,12 @@
 # Starting Capital (Portfolio Management)
 
-#### About
+## About
 This program determines an upper bound for the probability of ruin over a finite
 time period given some starting capital. It takes a list of wagers in
 HistoricalWagers.csv as input and proceeds as follows:
  1. Iterate though the wagers generating non-overlapping subsequences which
-  1. Begin with a loss
-  2. Have positive sum
+    1. Begin with a loss
+    2. Have positive sum
  2. Take the cumulative sum of each subsequence
  3. Calculate the minimum of these cumulative sums
  The end result of this process is a list of maximum losses incurred before
@@ -23,7 +23,7 @@ P(ruin over the next y years) < 1 - P(MLBBE < N)^s
 
 We heuristically select a starting capital such that this value is low.
 
-#### Potential Issues
+## Potential Issues
  1. There are a very low number (10s) of MLBBEs generated. A sample is likely
  to under-represent large losses. It might be possible to adjust the
  distribution to account for this.

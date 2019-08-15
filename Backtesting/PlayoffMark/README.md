@@ -1,6 +1,6 @@
 # PlayoffMark (Strategy)
 
-#### About
+## About
  * Strategy for wagering on NHL playoff games
  * See Misc/Explanation for more information
  * Run `pip install requirements.txt` (in /Attridge/Strategies/PlayoffMark) to install the required Python libraries.

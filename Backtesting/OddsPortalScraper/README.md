@@ -1,9 +1,9 @@
 # OddsPortalScraper (Data Exploration)
 
-#### About
+## About
 Scrapes regular time odds for NHL games from oddsportal.com
 
-#### Requirements
+## Requirements
  1. Run `pip install requirements.txt` to install the required Python libraries.
  2. Install Firefox.
  3. Install geckodriver from Mozilla and add it to your PATH. Download the
