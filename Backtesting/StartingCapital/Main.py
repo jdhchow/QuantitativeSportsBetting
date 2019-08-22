@@ -18,7 +18,7 @@ capital.
 if __name__ == '__main__':
     print(str(datetime.datetime.now()) + ': Started')
 
-    startingCapital = 6000
+    startingCapital = 9000
 
     with open('HistoricalWagers.csv', mode='r') as dataFile:
         backtest = pd.read_csv(dataFile, encoding='utf-8', index_col=0)

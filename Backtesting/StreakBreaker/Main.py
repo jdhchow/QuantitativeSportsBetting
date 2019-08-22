@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from scipy.optimize import linprog
 import matplotlib.pyplot as plt
 import datetime
 
@@ -10,7 +9,7 @@ Author: Jonathan Chow
 Date Modified: 2019-08-17
 Python Version: 3.7
 
-Reads in maximum odds are determines whether there is arbitrage potential.
+Bets against win-streaks
 '''
 
 
@@ -24,6 +23,15 @@ def getWinner(data):
         winner = -1
 
     return winner
+
+
+def calculateReturns(prediction, winner, currOdds, oppOdds, wager):
+    applicableOdds = currOdds if prediction == 1 else oppOdds
+
+    if prediction == winner:
+        return (applicableOdds - 1) * applicableOdds * wager
+    else:
+        return -applicableOdds * wager
 
 
 def readHistoricalGameData(season):
@@ -88,6 +96,9 @@ if __name__ == '__main__':
     # seasonList = [2002, 2003, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018]
     seasonList = [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018]
 
+    # Wager 100 * odds (CAD $)
+    wagerAmount = 100
+
     # Being with 5000 (CAD $)
     initialNotional = 5000
 
@@ -102,8 +113,7 @@ if __name__ == '__main__':
 
     outputColumns = ['currTeam.odds', 'tie.odds', 'oppTeam.odds',
                      'game.winner',
-                     'currTeam.wager', 'tie.wager', 'oppTeam.wager',
-                     'WagerReturns']
+                     'predictions']
 
     acceptableBookmakers = ['bet365', 'William Hill', 'Bethard']
 
@@ -117,32 +127,41 @@ if __name__ == '__main__':
             trainingData['game.winner'] = trainingData.apply(lambda row: getWinner(row), axis=1)
 
             # Remove redundant data and rows without odds available
-            trainingData = trainingData[::2]
             trainingData = trainingData.loc[trainingData['currTeam.odds'] != 0]
 
-            # Generate wager amounts and returns
-            wagers = {}
-            c = [0, 0, 0, -1]
-            b = [0, 0, 0, 0, 0, 0, initialNotional]
-            xi_bounds = (0, None)
+            # Generate 3 game running average (up to prev. game)
+            runningAvg = {}
 
-            trainingDataDict = trainingData.to_dict(orient='index')
+            for teamId in trainingData['team.id'].unique():
+                restricted = trainingData.loc[trainingData['team.id'] == teamId].copy()
+                restricted['runningAvg'] = (restricted['game.winner'] + 1) / 2
+                restricted['runningAvg'] = restricted['runningAvg'].rolling(3).mean().shift(1)
 
-            for key, value in trainingDataDict.items():
-                A = [[(value['currTeam.odds'] - 1), -1, -1, -1],
-                     [-(value['currTeam.odds'] - 1), 1, 1, 1],
-                     [-1, (value['tie.odds'] - 1), -1, -1],
-                     [1, -(value['tie.odds'] - 1), 1, 1],
-                     [-1, -1, (value['oppTeam.odds'] - 1), -1],
-                     [1, 1, -(value['oppTeam.odds'] - 1), 1],
-                     [1, 1, 1, 0]]
+                runningAvg.update(restricted['runningAvg'].to_dict())
 
-                res = linprog(c, A_ub=A, b_ub=b, bounds=[xi_bounds, xi_bounds, xi_bounds, xi_bounds])
+            trainingData = pd.concat([trainingData, pd.DataFrame(runningAvg, index=['runningAvg']).transpose()], sort=True, ignore_index=False, axis=1)
 
-                wagers[key] = {'WagerReturns': -res['fun']}
-                wagers[key]['currTeam.wager'], wagers[key]['tie.wager'], wagers[key]['oppTeam.wager'] = res['x'][:3]
+            # Sort dataframe to put home team first
+            trainingData = trainingData.sort_index(level=[0, 1], ascending=[True, False])
 
-            trainingData = pd.concat([trainingData, pd.DataFrame(wagers).transpose()], sort=True, ignore_index=False, axis=1)
+            # Generate predictions
+            predictions = []
+
+            for gameIndex in range(0, len(trainingData), 2):
+                overValued = [1 if trainingData['runningAvg'].iloc[gameIndex] == 1 else 0,
+                              1 if trainingData['runningAvg'].iloc[gameIndex + 1] == 1 else 0]
+
+                if overValued[0] > overValued[1]:
+                    predictions.append(-1)
+                elif overValued[1] > overValued[0]:
+                    predictions.append(1)
+                else:
+                    predictions.append(0)
+
+            # Remove redundancy
+            trainingData = trainingData[::2]
+            trainingData['predictions'] = predictions
+            trainingData = trainingData.loc[trainingData['predictions'] != 0]
 
             # Concatenate results with other years
             completeData = pd.concat([completeData, trainingData[outputColumns]], sort=True, ignore_index=False)
@@ -150,6 +169,13 @@ if __name__ == '__main__':
             print(str(datetime.datetime.now()) + ': Finished ' + str(season))
         except FileNotFoundError:
             print(str(datetime.datetime.now()) + ': Error reading one or more files from season ' + str(season))
+
+    # Calculate returns for each game
+    completeData['WagerReturns'] = completeData.apply(lambda row: calculateReturns(row['predictions'],
+                                                                                   row['game.winner'],
+                                                                                   row['currTeam.odds'],
+                                                                                   row['oppTeam.odds'],
+                                                                                   wagerAmount), axis=1)
 
     # Add initial fund size and split returns by season
     cumulativeWagerReturns = [[initialNotional]]
@@ -174,7 +200,7 @@ if __name__ == '__main__':
 
     plt.xlabel('Game Number')
     plt.ylabel('Notional (CAD $)')
-    plt.title('Arbitrage Cumulative Returns (2009-2018)')
+    plt.title('Streak Breaker Model Cumulative Returns (2009-2018)')
     plt.savefig('Analysis/CumulativeReturns.png', dpi=500)
 
     # Print results
