@@ -16,7 +16,7 @@ This program calculates the correlation between strategies
 if __name__ == '__main__':
     print(str(datetime.datetime.now()) + ': Started')
 
-    strategies = ['PlayoffMarkEx', 'StreakBreaker']
+    strategies = ['PlayoffMarkEx', 'StreakBreaker', 'ArbNHL']
 
     stratFrame = pd.DataFrame()
 
