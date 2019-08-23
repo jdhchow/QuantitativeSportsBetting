@@ -18,13 +18,26 @@ capital.
 if __name__ == '__main__':
     print(str(datetime.datetime.now()) + ': Started')
 
-    startingCapital = 9000
+    startingCapital = 15000
 
-    with open('HistoricalWagers.csv', mode='r') as dataFile:
-        backtest = pd.read_csv(dataFile, encoding='utf-8', index_col=0)
-        backtest.index = backtest.index.astype(str)
+    strategies = ['PlayoffMarkEx', 'StreakBreaker', 'ArbNHL']
 
-    wagers = backtest['WagerReturns']
+    stratFrame = pd.DataFrame()
+
+    for strategy in strategies:
+        try:
+            with open('Strategies/' + strategy + '.csv', mode='r') as dataFile:
+                backtest = pd.read_csv(dataFile, encoding='utf-8', index_col=0)
+                backtest.index = backtest.index.astype(str)
+                backtest.columns = [strategy]
+
+                stratFrame = pd.concat([stratFrame, backtest], sort=True, ignore_index=False, axis=1)
+        except FileNotFoundError:
+            print(str(datetime.datetime.now()) + ': Error reading ' + strategy + ' file')
+
+    stratFrame['WagerReturns'] = stratFrame.sum(axis=1)
+
+    wagers = stratFrame['WagerReturns']
     maxLosses = []
     cumSum = 0
     losses = []
@@ -66,5 +79,38 @@ if __name__ == '__main__':
     plt.title('Histogram of Loss Before Break Even\nP(ruin in period) < {:.3} with Starting Notional = {}'.format(pRuin, startingCapital))
 
     plt.savefig('LossBeforeBreakEven.png', dpi=500)
+
+    # Add initial fund size and split returns by season
+    cumulativeWagerReturns = [[startingCapital]]
+
+    # Remove games that are not wagered on
+    stratFrame = stratFrame.loc[stratFrame['WagerReturns'] != 0]
+
+    seasonList = list(stratFrame.index.str[:4].astype(int).unique())
+
+    for season in seasonList:
+        cumulativeWagerReturns.append(list(stratFrame.loc[stratFrame.index.str[:4].astype(int) == season, 'WagerReturns']))
+
+    # Calculate cumulative returns
+    for seasonIter in range(1, len(cumulativeWagerReturns)):
+        cumulativeWagerReturns[seasonIter] = np.cumsum(
+            [cumulativeWagerReturns[seasonIter - 1][-1]] + cumulativeWagerReturns[seasonIter])
+
+    # Graph returns over time
+    plt.figure(figsize=(10, 5))
+
+    xAxisCounter = 0
+    colourList = ['#015482', '#95D0FC', '#5E819D'] * int(np.ceil(len(seasonList) / 3))
+
+    for returnIter in range(1, len(cumulativeWagerReturns)):
+        plt.plot(list(range(xAxisCounter, xAxisCounter + len(cumulativeWagerReturns[returnIter]))),
+                 cumulativeWagerReturns[returnIter], c=colourList[returnIter - 1])
+
+        xAxisCounter += len(cumulativeWagerReturns[returnIter]) - 1
+
+    plt.xlabel('Game Number')
+    plt.ylabel('Notional (CAD $)')
+    plt.title('NHL Strategies Cumulative Return (2009-2018)')
+    plt.savefig('CumulativeReturns.png', dpi=500)
 
     print(str(datetime.datetime.now()) + ': Finished')
