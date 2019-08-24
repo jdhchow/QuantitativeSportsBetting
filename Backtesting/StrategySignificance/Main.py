@@ -29,9 +29,9 @@ def calculateReturns(prediction, winner, currOdds, oppOdds, wager):
 if __name__ == '__main__':
     print(str(datetime.datetime.now()) + ': Started')
 
-    strategy = 'StreakBreaker'
+    strategy = 'PlayoffMarkEx'
 
-    samples = 1000
+    samples = 5000
     wagerAmount = 100
 
     try:
@@ -54,23 +54,24 @@ if __name__ == '__main__':
                                             wagerAmount)
             trialResults.append(sampleReturn)
 
-        sampleResults.append(sum(trialResults))
+        sampleResults.append(np.mean(trialResults))
 
     # Fit normal distribution to the returns
     P = norm.fit(sampleResults)
 
     # Test for strategy significance
-    strategyReturn = backtest['WagerReturns'].sum()
+    strategyReturn = backtest['WagerReturns'].mean()
+    ttset, pval = ttest_1samp(sampleResults, strategyReturn)
 
     print('Mean: ' + str(norm.mean(*P)))
     print('Standard Deviation: ' + str(norm.std(*P)))
     print('Strategy Return: ' + str(strategyReturn))
-
-    ttset, pval = ttest_1samp(sampleResults, strategyReturn)
+    print('P-Value: ' + str(pval))
+    print('T Statistic: ' + str(ttset))
 
     # Plot histogram of returns
     plt.figure(figsize=(10, 5))
-    plt.hist(sampleResults, bins=30, edgecolor='black', density=True)
+    plt.hist(sampleResults, bins=50, edgecolor='black', density=True)
 
     plt.plot([strategyReturn, strategyReturn], plt.ylim(), 'k-', color='red', lw=2)
 
@@ -79,9 +80,9 @@ if __name__ == '__main__':
     rP = norm.pdf(rX, *P)
     plt.plot(rX, rP, color='black')
 
-    plt.xlabel('Sample Returns (CAD $)')
+    plt.xlabel('Sample Expected Return per Wager (CAD $)')
     plt.ylabel('Probability (%)')
-    plt.title('Histogram of Random Returns (' + strategy + ')\nMean = {:.3}, Std = {:.3}'.format(norm.mean(*P), norm.std(*P)))
+    plt.title('Histogram of Sample Expected Return per Wager (' + strategy + ')\nMean = {:.3}, Std = {:.3}'.format(norm.mean(*P), norm.std(*P)))
 
     plt.savefig('StrategySignificance.png', dpi=500)
 
