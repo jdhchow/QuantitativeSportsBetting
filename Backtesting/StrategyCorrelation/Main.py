@@ -45,6 +45,7 @@ if __name__ == '__main__':
     ticks = np.arange(0, len(stratFrame.columns), 1)
     ax.set_xticks(ticks)
     plt.xticks(rotation=90)
+    ax.set_title('NHL Strategy Correlation (2009 - 2018)\n\n\n\n\n')
     ax.set_yticks(ticks)
     ax.set_xticklabels(stratFrame.columns)
     ax.set_yticklabels(stratFrame.columns)

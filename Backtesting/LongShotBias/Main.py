@@ -153,7 +153,7 @@ if __name__ == '__main__':
 
     # Graph mean of wager returns (expected return per wager)
     fig = plt.plot()
-    plt.title('Expected Return Betting on Favourite/Tie/Non-Favourite\np < {:.3}, SEM Error Bars'.format(pval))
+    plt.title('Expected Return Betting on Favourite/Tie/Non-Favourite (2009 - 2018)\np < {:.3}, SEM Error Bars'.format(pval))
     plt.ylabel('Expected Return per Wager (CAD $)')
 
     x = np.array(['Favourite', 'Tie', 'Non-Favourite'])
