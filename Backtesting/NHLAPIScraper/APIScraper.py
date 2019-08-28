@@ -80,13 +80,21 @@ def getBaseGameInformation(gameId):
         baseInformation['game.type'] = [nhlDict['gameData']['game']['type']] * 2
         baseInformation['game.date'] = [datetime.datetime.strptime(nhlDict['gameData']['datetime']['dateTime'][:-4], '%Y-%m-%dT%H:%M')] * 2
 
-        homeGoals = nhlDict['liveData']['boxscore']['teams']['home']['teamStats']['teamSkaterStats']['goals']
-        awayGoals = nhlDict['liveData']['boxscore']['teams']['away']['teamStats']['teamSkaterStats']['goals']
+        homeGoals = nhlDict['liveData']['linescore']['teams']['home']['goals']
+        awayGoals = nhlDict['liveData']['linescore']['teams']['away']['goals']
 
-        overtime = True if nhlDict['liveData']['linescore']['currentPeriod'] == 4 else False
+        overtime = True if nhlDict['liveData']['linescore']['currentPeriod'] >= 4 else False
+
+        baseInformation['final.period'] = [nhlDict['liveData']['linescore']['currentPeriod']] * 2
+
+        baseInformation['pulledGoalie'] = [0 if nhlDict['liveData']['linescore']['teams']['home']['goaliePulled'] is False else 1,
+                                           0 if nhlDict['liveData']['linescore']['teams']['away']['goaliePulled'] is False else 1]
+
+        baseInformation['shootout'] = ['1'] * 2 if nhlDict['liveData']['linescore']['hasShootout'] else [0] * 2
 
         if not overtime:
             baseInformation['goals'] = [homeGoals, awayGoals]
+            baseInformation['game.ot.winner'] = [''] * 2
 
             if homeGoals > awayGoals:
                 baseInformation['game.winner'] = ['home'] * 2
@@ -97,9 +105,17 @@ def getBaseGameInformation(gameId):
         else:
             baseInformation['game.winner'] = ['tie'] * 2
             baseInformation['goals'] = [min(homeGoals, awayGoals)] * 2
+            baseInformation['game.ot.winner'] = ['home'] * 2 if homeGoals > awayGoals else ['away'] * 2
 
         baseInformation['home'] = [1, 0]
         baseInformation['away'] = [0, 1]
+
+        # Conference and divisions only make sense post-2013
+        baseInformation['conference.id'] = [str(nhlDict['gameData']['teams']['home']['conference']['id']),
+                                            str(nhlDict['gameData']['teams']['away']['conference']['id'])]
+
+        baseInformation['division.id'] = [str(nhlDict['gameData']['teams']['home']['division']['id']),
+                                          str(nhlDict['gameData']['teams']['away']['division']['id'])]
 
         baseInformation['team.id'] = [str(nhlDict['gameData']['teams']['home']['id']),
                                       str(nhlDict['gameData']['teams']['away']['id'])]
