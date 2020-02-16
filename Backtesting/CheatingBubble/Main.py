@@ -9,7 +9,7 @@ Author: Jonathan Chow
 Date Modified: 2019-08-25
 Python Version: 3.7
 
-Bets against non-favourites that have not been rested adequately
+Determine if teams on the bubble are more likely to win games
 '''
 
 
@@ -24,6 +24,18 @@ def getWinner(winnerSide, otWinnerSide, side):
             winner = 0.5
     else:
         winner = 0
+
+    return winner
+
+
+def getWinner1(data):
+    # Mapping for each row is: Win = 1, Tie = 0, Lose = -1
+    if (data['game.winner'] == 'home' and data['home'] == 1) or (data['game.winner'] == 'away' and data['home'] == 0):
+        winner = 1
+    elif data['game.winner'] == 'tie':
+        winner = 0
+    else:
+        winner = -1
 
     return winner
 
@@ -96,19 +108,88 @@ def mergeOddsHelper(row, odds, side, allowedBookmakers):
     return euroOdd
 
 
+def checkInPlayoffs(ranking, member):
+    # Check if in top three in the division
+    rankedHigher = ranking.loc[ranking['Division'] == member['division.id']].copy()
+    sameDivTop3 = list(rankedHigher.sort_values(by=['Points', 'Wins'], ascending=False).index)[:3]
+
+    if member['team.id'] in sameDivTop3:
+        return 1
+
+    # Check if wildcards
+    rankedHigher = ranking.loc[ranking['Conference'] == member['conference.id']].copy()
+    rankedHigher = rankedHigher.loc[rankedHigher['Division'] != member['division.id']]
+    diffDivTop3 = list(rankedHigher.sort_values(by=['Points', 'Wins'], ascending=False).index)[:3]
+
+    rankedHigher = ranking.loc[ranking['Conference'] == member['conference.id']].copy()
+    rankedHigher = rankedHigher.drop(sameDivTop3 + diffDivTop3)
+    conferenceWildCards = list(rankedHigher.sort_values(by=['Points', 'Wins'], ascending=False).index)[:2]
+
+    if member['team.id'] in conferenceWildCards:
+        return 1
+
+    return 0
+
+
 def checkOnBubble(ranking, currGameHome, currGameAway):
     updatedRanking = ranking.copy()
 
+    # Update rankings table with game information
+    for member in [currGameHome, currGameAway]:
+        updatedRanking['Points'].loc[member['team.id']] = member['points']
+        updatedRanking['Wins'].loc[member['team.id']] = member['gamesWon']
+        updatedRanking['RemainingGames'].loc[member['team.id']] -= 1
 
+    # Check if currently qualified for playoffs
+    playoffList = [checkInPlayoffs(updatedRanking, currGameHome), checkInPlayoffs(updatedRanking, currGameAway)]
 
-    return 0, updatedRanking
+    # Check if win puts the team in the playoffs
+    theoreticalRanking = updatedRanking.copy()
+    theoreticalRanking['Points'].loc[currGameHome['team.id']] += 2
+    theoreticalRanking['Wins'].loc[currGameHome['team.id']] += 1
+    theoreticalPlayoffList = [checkInPlayoffs(theoreticalRanking, currGameHome)]
+
+    theoreticalRanking = updatedRanking.copy()
+    theoreticalRanking['Points'].loc[currGameAway['team.id']] += 2
+    theoreticalRanking['Wins'].loc[currGameAway['team.id']] += 1
+    theoreticalPlayoffList += [checkInPlayoffs(theoreticalRanking, currGameAway)]
+
+    # Check if another team winning can remove them from the playoffs
+    theoreticalRanking = updatedRanking.copy()
+    theoreticalRanking['Points'].loc[currGameHome['team.id']] += 2
+    theoreticalRanking['Wins'].loc[currGameHome['team.id']] += 1
+
+    for team in [element for element in list(theoreticalRanking.index) if element != currGameHome['team.id']]:
+        theoreticalRanking['Points'].loc[team] += 2 * theoreticalRanking['RemainingGames'].loc[team]
+        theoreticalRanking['Wins'].loc[team] += theoreticalRanking['RemainingGames'].loc[team]
+
+    canBeRemoved = [checkInPlayoffs(theoreticalRanking, currGameHome)]
+
+    theoreticalRanking = updatedRanking.copy()
+    theoreticalRanking['Points'].loc[currGameAway['team.id']] += 2
+    theoreticalRanking['Wins'].loc[currGameAway['team.id']] += 1
+
+    for team in [element for element in list(theoreticalRanking.index) if element != currGameAway['team.id']]:
+        theoreticalRanking['Points'].loc[team] += 2 * theoreticalRanking['RemainingGames'].loc[team]
+        theoreticalRanking['Wins'].loc[team] += theoreticalRanking['RemainingGames'].loc[team]
+
+    canBeRemoved += [checkInPlayoffs(theoreticalRanking, currGameAway)]
+
+    onB = []
+    for elementIndex in range(0, 2):
+        if playoffList[elementIndex] == 0 and theoreticalPlayoffList[elementIndex] == 1 and canBeRemoved[elementIndex] == 1:
+            onB += [1]
+        else:
+            onB += [0]
+
+    return onB, updatedRanking
 
 
 if __name__ == '__main__':
     print(str(datetime.datetime.now()) + ': Started')
 
-    # seasonList = [2013, 2014, 2015, 2016, 2017, 2018]
-    seasonList = [2018]
+    seasonList = [2013, 2014, 2015, 2016, 2017, 2018]
+    # seasonList = [2018]
 
     # Wager 100 * odds (CAD $)
     wagerAmount = 100
@@ -129,10 +210,15 @@ if __name__ == '__main__':
                        'team.name', 'team.id',
                        'goals', 'game.winner', 'game.ot.winner']
 
-    outputColumns = ['currTeam.odds', 'tie.odds', 'oppTeam.odds',
+    outputColumns = ['home', 'away',
+                     'currTeam.odds', 'tie.odds', 'oppTeam.odds',
                      'game.date',
-                     'gameTimeDiff',
-                     'game.winner',
+                     'game.type',
+                     'conference.id', 'division.id',
+                     'final.period',
+                     'pulledGoalie', 'shootout',
+                     'team.name', 'team.id',
+                     'goals', 'game.winner', 'game.ot.winner',
                      'predictions']
 
     acceptableBookmakers = ['bet365', 'William Hill', 'Bethard']
@@ -147,17 +233,18 @@ if __name__ == '__main__':
             trainingData = trainingData[trainingColumns]
             trainingData.fillna(0, inplace=True)
 
-            trainingData['game.winner'] = trainingData.apply(lambda row: getWinner(row['game.winner'], row['game.ot.winner'], row['home']), axis=1)
+            trainingData['game.pointsCalc'] = trainingData.apply(lambda row: getWinner(row['game.winner'], row['game.ot.winner'], row['home']), axis=1)
+            trainingData['game.winner'] = trainingData.apply(lambda row: getWinner1(row), axis=1)
 
             # Remove redundant data and rows without odds available
             # trainingData = trainingData.loc[trainingData['currTeam.odds'] != 0]
+            trainingData = trainingData.loc[trainingData['game.type'] == 'R']
 
             teamRanking = pd.DataFrame({team: {'Conference': (trainingData.loc[trainingData['team.id'] == team, 'conference.id']).iloc[0],
                                                'Division': (trainingData.loc[trainingData['team.id'] == team, 'division.id']).iloc[0],
                                                'Points': 0,
                                                'Wins': 0,
-                                               'RemainingGames': 82,
-                                               'PlayoffQualify': 0} for team in trainingData['team.id'].unique()}).transpose()
+                                               'RemainingGames': 82} for team in trainingData['team.id'].unique()}).transpose()
 
             # Generate running points
             trainingData = trainingData.sort_values(by='game.date', ascending=True)
@@ -166,7 +253,7 @@ if __name__ == '__main__':
 
             for teamId in trainingData['team.id'].unique():
                 restricted = trainingData.loc[trainingData['team.id'] == teamId].copy()
-                restricted['points'] = restricted['game.winner'] * 2
+                restricted['points'] = restricted['game.pointsCalc'] * 2
                 restricted['points'] = restricted['points'].expanding().sum().shift(1)
 
                 points.update(restricted['points'].to_dict())
@@ -180,7 +267,7 @@ if __name__ == '__main__':
 
             for teamId in trainingData['team.id'].unique():
                 restricted = trainingData.loc[trainingData['team.id'] == teamId].copy()
-                restricted['gamesWon'] = restricted.apply(lambda row: 1 if row['game.winner'] == 1 and row['shootout'] == 0 else 0, axis=1)
+                restricted['gamesWon'] = restricted.apply(lambda row: 1 if row['game.pointsCalc'] == 1 and row['shootout'] == 0 else 0, axis=1)
                 restricted['gamesWon'] = restricted['gamesWon'].expanding().sum().shift(1)
 
                 gamesWon.update(restricted['gamesWon'].to_dict())
@@ -207,11 +294,11 @@ if __name__ == '__main__':
 
             for gameIndex in range(0, len(trainingData), 2):
                 if trainingData['onBubble'].iloc[gameIndex] == 1 and trainingData['onBubble'].iloc[gameIndex + 1] == 0:
-                    predictions += [1]
+                    predictions += [1, -1]
                 elif trainingData['onBubble'].iloc[gameIndex] == 0 and trainingData['onBubble'].iloc[gameIndex + 1] == 1:
-                    predictions += [-1]
+                    predictions += [-1, 1]
                 else:
-                    predictions += [0]
+                    predictions += [0, 0]
 
             # Remove redundancy
             # trainingData = trainingData[::2]
@@ -255,7 +342,7 @@ if __name__ == '__main__':
 
     plt.xlabel('Game Number')
     plt.ylabel('Notional (CAD $)')
-    plt.title('Worse Tired Model Cumulative Returns (2009-2018)')
+    plt.title('Worse Tired Model Cumulative Returns (2013-2018)')
     plt.savefig('Analysis/CumulativeReturns.png', dpi=500)
 
     # Print results
