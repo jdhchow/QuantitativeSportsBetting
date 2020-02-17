@@ -58,10 +58,10 @@ def checkMatrixRank(keyId, trainingDF, graphId):
     plt.close()
 
 
-def predictPointDiff(keyId, homePoints, pointDiff, timeBuckets, singularVals):
+def predictPointDiff(keyId, homePoints, awayPoints, timeBuckets, singularVals):
     trainQtr = 1
     metrics = 2
-    weights = [0.25, 0.75]
+    weights = [1, 1]
 
     trainSeconds = trainQtr * 12 * 60  # Will break if training includes overtime
 
@@ -69,12 +69,12 @@ def predictPointDiff(keyId, homePoints, pointDiff, timeBuckets, singularVals):
     otherKeys.remove(keyId)
 
     trainArray = [homePoints.loc[:trainSeconds],
-                  pointDiff.loc[:trainSeconds]]
+                  awayPoints.loc[:trainSeconds]]
 
     testArray = [homePoints.loc[trainSeconds + timeBuckets:],
-                 pointDiff.loc[trainSeconds + timeBuckets:]]
+                 awayPoints.loc[trainSeconds + timeBuckets:]]
 
-    plt.figure(figsize=(8, 6), dpi=100)
+    # plt.figure(figsize=(8, 6), dpi=100)
 
     ########### Multi-dimensional robust synthetic control ##########
     mrscModel = MultiRobustSyntheticControl(metrics, weights, keyId, singularVals, len(trainArray[0]),
@@ -82,39 +82,55 @@ def predictPointDiff(keyId, homePoints, pointDiff, timeBuckets, singularVals):
                                             otherSeriesKeysArray=otherKeys)
 
     mrscModel.fit(trainArray)
-    denoisedDF = mrscModel.model.denoisedDF()
     predictions = mrscModel.predict(testArray)
 
-    plt.plot(list(pointDiff.index), pointDiff[keyId], color='tomato', label='Observations')
-    plt.plot(list(pointDiff.index), np.append(denoisedDF[keyId][int(len(denoisedDF)/2):], predictions[1], axis=0), color='darkblue', label='Predictions')
+    denoisedDF = mrscModel.model.denoisedDF()
+    denoisedSeries = denoisedDF[keyId].iloc[:int(len(denoisedDF)/2)] - denoisedDF[keyId].iloc[int(len(denoisedDF)/2):].values
+    fullSeries = np.append(denoisedSeries, predictions[0] - predictions[1], axis=0)
+
+    # Point Difference
+    # plt.plot(list(homePoints.index), homePoints[keyId] - awayPoints[keyId], color='tomato', label='Observations')
+    # plt.plot(list(homePoints.index), fullSeries, color='darkblue', label='Predictions')
+
+    # Home Points
+    # plt.plot(list(homePoints.index), homePoints[keyId], color='tomato', label='Observations')
+    # plt.plot(list(homePoints.index), np.append(denoisedDF[keyId].iloc[:int(len(denoisedDF)/2)], predictions[0], axis=0),color='darkblue', label='Predictions')
+
+    # Away Points
+    # plt.plot(list(homePoints.index), awayPoints[keyId], color='tomato', label='Observations')
+    # plt.plot(list(homePoints.index), np.append(denoisedDF[keyId].iloc[int(len(denoisedDF)/2):], predictions[1], axis=0), color='darkblue', label='Predictions')
     #################################################################
 
     ############### Singular robust synthetic control ###############
-    # rscModel = RobustSyntheticControl(keyId, singularVals, len(pointDiff.loc[:trainSeconds]),
+    # rscModel = RobustSyntheticControl(keyId, singularVals, len(homePoints.loc[:trainSeconds]),
     #                                   probObservation=1.0, modelType='svd', svdMethod='numpy',
     #                                   otherSeriesKeysArray=otherKeys)
     #
-    # rscModel.fit(pointDiff.loc[:trainSeconds])
+    # rscModel.fit(homePoints.loc[:trainSeconds])
     # denoisedDF = rscModel.model.denoisedDF()
-    # predictions = rscModel.predict(pointDiff.loc[trainSeconds + timeBuckets:])
+    # predictions = rscModel.predict(homePoints.loc[trainSeconds + timeBuckets:])
     #
-    # plt.plot(list(pointDiff.index), pointDiff[keyId], color='tomato', label='Observations')
-    # plt.plot(list(pointDiff.index), np.append(denoisedDF[keyId], predictions, axis=0), color='darkblue', label='Predictions')
+    # plt.plot(list(homePoints.index), homePoints[keyId], color='tomato', label='Observations')
+    # plt.plot(list(homePoints.index), np.append(denoisedDF[keyId], predictions, axis=0), color='darkblue', label='Predictions')
     #################################################################
 
-    plt.axvline(x=trainSeconds - 1, linewidth=1, color='black', label='Intervention')
+    # plt.axvline(x=trainSeconds - 1, linewidth=1, color='black', label='Intervention')
 
     # Lines to mark end of regular time and overtime
-    plt.axvline(x=2880, linewidth=1, linestyle='--', color='black', label='Potential End of Game')
-    plt.axvline(x=3180, linewidth=1, linestyle='--', color='black')
-    plt.axvline(x=3480, linewidth=1, linestyle='--', color='black')
-    plt.axvline(x=3780, linewidth=1, linestyle='--', color='black')
+    # plt.axvline(x=2880, linewidth=1, linestyle='--', color='black', label='Potential End of Game')
+    # plt.axvline(x=3180, linewidth=1, linestyle='--', color='black')
+    # plt.axvline(x=3480, linewidth=1, linestyle='--', color='black')
+    # plt.axvline(x=3780, linewidth=1, linestyle='--', color='black')
 
-    plt.legend(loc='upper left')
-    plt.title('Goal Difference (Home - Away) Prediction for ' + str(keyId))
-    plt.savefig('Analysis/' + str(keyId) + '_' + 'PointDiffPrediction.png')
-    plt.clf()
-    plt.close()
+    # plt.legend(loc='upper left')
+    # plt.xlabel("Time (Seconds)")
+    # plt.ylabel("Running Point Difference (Home - Away)")
+    # plt.title('Point Difference Prediction for ' + str(keyId))
+    # plt.savefig('Analysis/' + str(keyId) + '_' + 'PointDiffPrediction.png')
+    # plt.clf()
+    # plt.close()
+
+    return fullSeries
 
 
 if __name__ == '__main__':
@@ -126,19 +142,22 @@ if __name__ == '__main__':
     timeGran = 15  # Buckets (seconds) in which points are recorded
 
     regSeasonHomePointsDF = pd.DataFrame()
-    regSeasonPointDiffDF = pd.DataFrame()
+    regSeasonAwayPointsDF = pd.DataFrame()
 
     playoffHomePointsDF = pd.DataFrame()
-    playoffPointDiffDF = pd.DataFrame()
+    playoffAwayPointsDF = pd.DataFrame()
+
+    completeDataDict = {'game.id': [],
+                        'regPredPointDiff': [], 'regActPointDiff': [],
+                        'ot1PredPointDiff': [], 'ot1ActPointDiff': [],
+                        'ot2PredPointDiff': [], 'ot2ActPointDiff': [],
+                        'ot3PredPointDiff': [], 'ot3ActPointDiff': []}
 
     trainingColumns = ['home', 'away',
                        'game.type',
                        'team.id',
                        'final.period',
                        'running.points']
-
-    outputColumns = ['game.winner', 'point.difference',
-                     'prediction.game.winner', 'prediction.point.difference']
 
     for season in seasonList:
         try:
@@ -169,30 +188,43 @@ if __name__ == '__main__':
 
                 if historicalGameData['game.type'].iloc[gameIndex] == 'R':
                     regSeasonHomePointsDF[historicalGameData.index.get_level_values(0)[gameIndex]] = gameDF['RunningPoints0']
-                    regSeasonPointDiffDF[historicalGameData.index.get_level_values(0)[gameIndex]] = gameDF['RunningPoints0'] - gameDF['RunningPoints1']
+                    regSeasonAwayPointsDF[historicalGameData.index.get_level_values(0)[gameIndex]] = gameDF['RunningPoints1']
                 else:
                     playoffHomePointsDF[historicalGameData.index.get_level_values(0)[gameIndex]] = gameDF['RunningPoints0']
-                    playoffPointDiffDF[historicalGameData.index.get_level_values(0)[gameIndex]] = gameDF['RunningPoints0'] - gameDF['RunningPoints1']
+                    playoffAwayPointsDF[historicalGameData.index.get_level_values(0)[gameIndex]] = gameDF['RunningPoints1']
 
             for playoffGame in playoffHomePointsDF.columns:
                 trainingHomePointsDF = copy.deepcopy(regSeasonHomePointsDF)
                 trainingHomePointsDF[playoffGame] = playoffHomePointsDF[playoffGame]
 
-                trainingPointDiffDF = copy.deepcopy(regSeasonPointDiffDF)
-                trainingPointDiffDF[playoffGame] = playoffPointDiffDF[playoffGame]
+                trainingAwayPointsDF = copy.deepcopy(regSeasonAwayPointsDF)
+                trainingAwayPointsDF[playoffGame] = playoffAwayPointsDF[playoffGame]
 
                 # checkMatrixRank(playoffGame, trainingHomePointsDF, 'HomePoints')
-                # checkMatrixRank(playoffGame, trainingPointDiffDF, 'PointDiff')
-                sVals = 50  # Based on the above checkMatrixRank
+                # checkMatrixRank(playoffGame, trainingAwayPointsDF, 'AwayPoints')
+                sVals = 4  # Based on the above checkMatrixRank
 
                 # Synthetic Control comprised of all regular season games, not just team of interest, due to Stein's Paradox
-                predictPointDiff(playoffGame, trainingHomePointsDF, trainingPointDiffDF, timeGran, sVals)
+                predDiffTemp = predictPointDiff(playoffGame, trainingHomePointsDF, trainingAwayPointsDF, timeGran, sVals)
+
+                completeDataDict['game.id'] += [playoffGame]
+                completeDataDict['regPredPointDiff'] += [predDiffTemp[int(2880 / timeGran)]]
+                completeDataDict['ot1PredPointDiff'] += [predDiffTemp[int(3180 / timeGran)]]
+                completeDataDict['ot2PredPointDiff'] += [predDiffTemp[int(3480 / timeGran)]]
+                completeDataDict['ot3PredPointDiff'] += [predDiffTemp[int(3780 / timeGran)]]
+
+                completeDataDict['regActPointDiff'] += [trainingHomePointsDF[playoffGame].loc[2880] - trainingAwayPointsDF[playoffGame].loc[2880]]
+                completeDataDict['ot1ActPointDiff'] += [trainingHomePointsDF[playoffGame].loc[3180] - trainingAwayPointsDF[playoffGame].loc[3180]]
+                completeDataDict['ot2ActPointDiff'] += [trainingHomePointsDF[playoffGame].loc[3480] - trainingAwayPointsDF[playoffGame].loc[3480]]
+                completeDataDict['ot3ActPointDiff'] += [trainingHomePointsDF[playoffGame].loc[3780] - trainingAwayPointsDF[playoffGame].loc[3780]]
 
         except FileNotFoundError:
             print(str(datetime.datetime.now()) + ': Error reading one or more files from season ' + str(season))
 
-    # # Print results
-    # with open('Analysis/HistoricalPerformanceRaw.csv', mode='w+') as dataFile:
-    #     completeData.to_csv(dataFile, encoding='utf-8', index=True)
+    completeData = pd.DataFrame(completeDataDict)
+
+    # Print results
+    with open('Analysis/HistoricalPerformanceRaw.csv', mode='w+') as dataFile:
+        completeData.to_csv(dataFile, encoding='utf-8', index=True)
 
     print(str(datetime.datetime.now()) + ': Finished')
