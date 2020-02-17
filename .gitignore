@@ -19,5 +19,5 @@
 *.jpeg
 *.log
 StrategyIdeas/*
-CommonData/*
 **/Misc/*
+**/tslib/*
