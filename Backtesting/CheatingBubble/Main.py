@@ -53,7 +53,7 @@ def calculateReturns(prediction, winner, currOdds, oppOdds, wager):
 
 
 def readHistoricalGameData(season):
-    with open('HistoricalGameDataOT/Season' + str(season) + '.csv', mode='r') as dataFile:
+    with open('HistoricalGameData_WithOT/Season' + str(season) + '.csv', mode='r') as dataFile:
         data = pd.read_csv(dataFile, encoding='utf-8', index_col=[0, 1])
         data.index = [data.index.get_level_values(0).astype(str), data.index.get_level_values(1)]
 
