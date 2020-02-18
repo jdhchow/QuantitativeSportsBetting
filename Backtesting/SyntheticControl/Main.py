@@ -58,15 +58,43 @@ def checkMatrixRank(keyId, trainingDF, graphId):
     plt.close()
 
 
+def filterGames(numControls, keyId, homePoints, awayPoints):
+    keyCurve = homePoints[keyId] - awayPoints[keyId]
+
+    colNames = list(homePoints.columns)
+    colNames.remove(keyId)
+
+    errorList = []
+
+    for colName in colNames:
+        currCurve = homePoints[colName] - awayPoints[colName]
+        error = np.sqrt(((keyCurve - currCurve) ** 2).mean())
+
+        errorList += [(colName, error)]
+
+    errorList.sort(key=lambda x: x[1])
+
+    # print(str(datetime.datetime.now()) + ': Keeping ' + str(numControls) + ' controls (RMSE: ' +
+    #       str(errorList[0][1]) + ' - ' + str(errorList[numControls][1]) + ')')
+
+    controlsToKeep = [errorTuple[0] for errorTuple in errorList][:numControls]
+
+    return controlsToKeep
+
+
 def predictPointDiff(keyId, homePoints, awayPoints, timeBuckets, singularVals):
     trainQtr = 1
     metrics = 2
     weights = [1, 1]
+    controlNum = 1000
 
     trainSeconds = trainQtr * 12 * 60  # Will break if training includes overtime
 
-    otherKeys = list(homePoints.columns)
-    otherKeys.remove(keyId)
+    # Select only games that have similar 1st qtr for the synthetic control
+    otherKeys = filterGames(controlNum, playoffGame, copy.deepcopy(homePoints.loc[:trainSeconds]), copy.deepcopy(awayPoints.loc[:trainSeconds]))
+
+    homePoints = homePoints[otherKeys + [keyId]]
+    awayPoints = awayPoints[otherKeys + [keyId]]
 
     trainArray = [homePoints.loc[:trainSeconds],
                   awayPoints.loc[:trainSeconds]]
@@ -74,7 +102,7 @@ def predictPointDiff(keyId, homePoints, awayPoints, timeBuckets, singularVals):
     testArray = [homePoints.loc[trainSeconds + timeBuckets:],
                  awayPoints.loc[trainSeconds + timeBuckets:]]
 
-    # plt.figure(figsize=(8, 6), dpi=100)
+    plt.figure(figsize=(8, 6), dpi=100)
 
     ########### Multi-dimensional robust synthetic control ##########
     mrscModel = MultiRobustSyntheticControl(metrics, weights, keyId, singularVals, len(trainArray[0]),
@@ -89,8 +117,8 @@ def predictPointDiff(keyId, homePoints, awayPoints, timeBuckets, singularVals):
     fullSeries = np.append(denoisedSeries, predictions[0] - predictions[1], axis=0)
 
     # Point Difference
-    # plt.plot(list(homePoints.index), homePoints[keyId] - awayPoints[keyId], color='tomato', label='Observations')
-    # plt.plot(list(homePoints.index), fullSeries, color='darkblue', label='Predictions')
+    plt.plot(list(homePoints.index), homePoints[keyId] - awayPoints[keyId], color='tomato', label='Observations')
+    plt.plot(list(homePoints.index), fullSeries, color='darkblue', label='Predictions')
 
     # Home Points
     # plt.plot(list(homePoints.index), homePoints[keyId], color='tomato', label='Observations')
@@ -109,26 +137,27 @@ def predictPointDiff(keyId, homePoints, awayPoints, timeBuckets, singularVals):
     # rscModel.fit(homePoints.loc[:trainSeconds])
     # denoisedDF = rscModel.model.denoisedDF()
     # predictions = rscModel.predict(homePoints.loc[trainSeconds + timeBuckets:])
+    # fullSeries = np.append(denoisedDF[keyId], predictions, axis=0)
     #
     # plt.plot(list(homePoints.index), homePoints[keyId], color='tomato', label='Observations')
     # plt.plot(list(homePoints.index), np.append(denoisedDF[keyId], predictions, axis=0), color='darkblue', label='Predictions')
     #################################################################
 
-    # plt.axvline(x=trainSeconds - 1, linewidth=1, color='black', label='Intervention')
+    plt.axvline(x=trainSeconds - 1, linewidth=1, color='black', label='Intervention')
 
     # Lines to mark end of regular time and overtime
-    # plt.axvline(x=2880, linewidth=1, linestyle='--', color='black', label='Potential End of Game')
-    # plt.axvline(x=3180, linewidth=1, linestyle='--', color='black')
-    # plt.axvline(x=3480, linewidth=1, linestyle='--', color='black')
-    # plt.axvline(x=3780, linewidth=1, linestyle='--', color='black')
+    plt.axvline(x=2880, linewidth=1, linestyle='--', color='black', label='Potential End of Game')
+    plt.axvline(x=3180, linewidth=1, linestyle='--', color='black')
+    plt.axvline(x=3480, linewidth=1, linestyle='--', color='black')
+    plt.axvline(x=3780, linewidth=1, linestyle='--', color='black')
 
     # plt.legend(loc='upper left')
-    # plt.xlabel("Time (Seconds)")
-    # plt.ylabel("Running Point Difference (Home - Away)")
-    # plt.title('Point Difference Prediction for ' + str(keyId))
-    # plt.savefig('Analysis/' + str(keyId) + '_' + 'PointDiffPrediction.png')
-    # plt.clf()
-    # plt.close()
+    plt.xlabel("Time (Seconds)")
+    plt.ylabel("Running Point Difference (Home - Away)")
+    plt.title('Point Difference Prediction for ' + str(keyId))
+    plt.savefig('Analysis/' + str(keyId) + '_' + 'PointDiffPrediction.png')
+    plt.clf()
+    plt.close()
 
     return fullSeries
 
@@ -139,7 +168,7 @@ if __name__ == '__main__':
     # seasonList = [2015, 2016, 2017, 2018]
     seasonList = [2018]
 
-    timeGran = 15  # Buckets (seconds) in which points are recorded
+    timeGran = 60  # Buckets (seconds) in which points are recorded
 
     regSeasonHomePointsDF = pd.DataFrame()
     regSeasonAwayPointsDF = pd.DataFrame()
