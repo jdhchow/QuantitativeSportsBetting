@@ -1,4 +1,4 @@
-# Attridge
+# Quantitative Sports Betting
 A repository for our quantitative sports betting fund
 
 ## 2019/2020 Season Schedules
